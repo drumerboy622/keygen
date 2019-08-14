@@ -18,12 +18,74 @@
 
 void error(const char *msg) { perror(msg); exit(0); } // Error function used for reporting issues
 
+
+/*********************************************************************************************
+ * Method Name: process_file
+ * input: filename of the file to be processed into buffer
+ * output: pointer to the buffer
+ * Description: This method processes the files indicated by the user. It also checks for 
+ * 	bad characters.
+ * ********************************************************************************************/
+
+char * process_file(char filename[])
+{
+	FILE *fptr; // file variable
+	char buffer[70000]; // buffer
+	char * ptrbuffer; // pointer to buffer
+	int charctr=0; // incrementor
+
+	// make sure the buffer is empty	
+	memset(buffer, '\0', sizeof(buffer));
+
+	// Open file and throw error if needed
+	fptr=fopen(filename, "r");
+	if(fptr == NULL)
+	{
+		fprintf(stderr, "File does not exist or can not be opened.");
+		exit(1);
+	}
+		
+
+	// add the first character to the buffer
+	buffer[charctr] = fgetc(fptr);
+	while(buffer[charctr] != EOF)
+	{
+
+		// check for bad characters as it is added to the buffer
+		if(buffer[charctr] < 'A' || buffer[charctr] > 'Z') 
+		{
+			if(buffer[charctr] != 32 && buffer[charctr] != 10)
+			{
+				fprintf(stderr, "Error bad characters\n");
+				exit(1);
+			}
+		}
+
+		charctr++;
+		
+		//add next character to buffer
+		buffer[charctr] = fgetc(fptr);
+	}
+
+	//close file
+	fclose(fptr);
+
+	// create the pointer to buffer
+	ptrbuffer = buffer;
+
+	return ptrbuffer;	
+}
+
+
+
 int main(int argc, char *argv[])
 {
 	int socketFD, portNumber, charsWritten, charsRead;
 	struct sockaddr_in serverAddress;
 	struct hostent* serverHostInfo;
 	char buffer[256];
+	char *	plaintext; // pointers to buffers of file contents
+	char *	mykey;
     
 	if (argc != 4) 
 	{ 
@@ -67,6 +129,20 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Trying to connect to wrong location.\n");
 		exit(2);
 	}
+
+	plaintext = process_file(argv[1]);
+	mykey = process_file(argv[2]);
+
+	// Check to make sure both files are the exact length
+	if(sizeof(plaintext) != sizeof(mykey))
+	{
+		fprintf(stderr, "Files are not the same length");
+		exit(1);
+	}
+
+
+
+
 
 	close(socketFD); // Close the socket
 	return(0);
