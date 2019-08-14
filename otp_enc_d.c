@@ -23,7 +23,8 @@ int main(int argc, char * argv[])
 		portNumber, 
 		charsRead;
 	socklen_t 	sizeOfClientInfo;
-	char 	buffer[69336];
+	char 	buffer[70000];
+	char	key[70000];
 	struct sockaddr_in 	serverAddress, 
 				clientAddress;
 
@@ -71,8 +72,8 @@ int main(int argc, char * argv[])
 		{		
 
 
-			// Get the message from the client and display it
-			memset(buffer, '\0', 256);
+			// Get the message from the client and determine if it is otp_enc 
+			memset(buffer, '\0', 70000);
 			charsRead = recv(establishedConnectionFD, buffer, 255, 0); // Read the client's message from the socket
 			if (charsRead < 0) 
 				fprintf(stderr, "ERROR reading from socket");
@@ -91,6 +92,24 @@ int main(int argc, char * argv[])
 			if (charsRead < 0) 
 				fprintf(stderr, "ERROR writing to socket");
 	
+			// receieve the message from the client	
+			memset(buffer, '\0', 70000);
+			charsRead = recv(establishedConnectionFD, buffer, 70000, 0); // Read the client's message from the socket
+			if (charsRead < 0) 
+				fprintf(stderr, "ERROR writing to socket");
+
+
+			// Send a quick ok to block the server from sending the 2 files together
+			charsRead = send(establishedConnectionFD, "ok", 3, 0); // Send success back
+
+			// recieve the key from the client
+			memset(key, '\0', 70000);
+			charsRead = recv(establishedConnectionFD, key, 70000, 0); // Read the client's message from the socket
+			if (charsRead < 0) 
+				fprintf(stderr, "ERROR writing to socket");
+
+
+
 
 
 			close(establishedConnectionFD); // Close the existing socket which is connected to the client
