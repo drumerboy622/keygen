@@ -4,7 +4,9 @@
  * Date: 08/13/2019
  * Class Information: Operating Systems I (CS_344_400)
  * Name: otp_enc.c
- * Description:
+ * Description: This file is used for project 4. It is the client side of a 2 way connection
+ *    to encrypt a message. The client will send the files to the server (key and message).
+ *    It will be encrypted by the server and sent back here (to the client).
  * ********************************************************************************************/
 
 #include <stdio.h>
@@ -16,7 +18,7 @@
 #include <netinet/in.h>
 #include <netdb.h> 
 
-void error(const char *msg) { perror(msg); exit(0); } // Error function used for reporting issues
+void error(const char *msg) { fprintf(stderr, "%s\n", msg); exit(0); } // Error function used for reporting issues
 
 
 /*********************************************************************************************
@@ -37,7 +39,7 @@ char * process_file(char filename[])
 	buffer = (char*)malloc(70000 * sizeof(char));
 	if(buffer == NULL)
 	{
-		fprintf(stderr, "Memory not allocated.\n");
+		error("Memory not allocated.\n");
 		exit(1);
 	}
 
@@ -45,7 +47,7 @@ char * process_file(char filename[])
 	fptr=fopen(filename, "r");
 	if(fptr == NULL)
 	{
-		fprintf(stderr, "File does not exist or can not be opened.");
+		error("File does not exist or can not be opened.");
 		exit(1);
 	}
 		
@@ -60,7 +62,7 @@ char * process_file(char filename[])
 		{
 			if(buffer[charctr] != 32 && buffer[charctr] != 10)
 			{
-				fprintf(stderr, "Error bad characters\n");
+				error("Error bad characters\n");
 				exit(1);
 			}
 		}
@@ -70,6 +72,9 @@ char * process_file(char filename[])
 		//add next character to buffer
 		buffer[charctr] = fgetc(fptr);
 	}
+
+	buffer[charctr] = '\0';
+	buffer[charctr-1] = '\0';
 
 	//close file
 	fclose(fptr);
@@ -84,15 +89,27 @@ int main(int argc, char *argv[])
 	int socketFD, portNumber, charsWritten, charsRead;
 	struct sockaddr_in serverAddress;
 	struct hostent* serverHostInfo;
-	char buffer[256];
+	char buffer[70000];
 	char * plaintext; // pointers to buffers of file contents
 	char * mykey;
-    
+	char * point_to_buf; // points to location of last sent byte
+    	int	ptlength;// plaintext and mykey length
 	if (argc != 4) 
 	{ 
-		fprintf(stderr,"USAGE: %s <file> <file> <port#> \n", argv[0]); 
+		fprintf(stderr, "USAGE: %s <file> <file> <port#> \n", argv[0]); 
 		exit(0); 
 	} // Check usage & args
+
+
+	plaintext = process_file(argv[1]);
+	mykey = process_file(argv[2]);
+
+	// Check to make sure both files are the exact length
+	if((strlen(plaintext)) > strlen(mykey))
+	{
+		fprintf(stderr, "Error: key '%s' is too short\n", argv[2]);
+		exit(1);
+	}
 
 	// Set up the server address struct
 	memset((char*)&serverAddress, '\0', sizeof(serverAddress)); // Clear out the address struct
@@ -100,7 +117,7 @@ int main(int argc, char *argv[])
 	serverAddress.sin_family = AF_INET; // Create a network-capable socket
 	serverAddress.sin_port = htons(portNumber); // Store the port number
 	serverHostInfo = gethostbyname("localhost"); // Convert the machine name into a special form of address
-	if (serverHostInfo == NULL) { fprintf(stderr, "CLIENT: ERROR, no such host\n"); exit(0); }
+	if (serverHostInfo == NULL) { error("CLIENT: ERROR, no such host\n"); exit(0); }
 	memcpy((char*)&serverAddress.sin_addr.s_addr, (char*)serverHostInfo->h_addr, serverHostInfo->h_length); // Copy in the address
 
 	// Set up the socket
@@ -110,7 +127,7 @@ int main(int argc, char *argv[])
 	// Connect to server
 	if (connect(socketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0) // Connect socket to address
 	{
-		fprintf(stderr, "Error connecting to port\n");
+		error("Error connecting to port\n");
 		exit(2);
 	}
 
@@ -119,7 +136,7 @@ int main(int argc, char *argv[])
 	// Send message to server
 	charsWritten = send(socketFD, buffer, strlen(buffer), 0); // Write to the server
 	if (charsWritten < 0) error("CLIENT: ERROR writing to socket");
-	if (charsWritten < strlen(buffer)) printf("CLIENT: WARNING: Not all data written to socket!\n");
+	if (charsWritten < strlen(buffer)) error("CLIENT: WARNING: Not all data written to socket!\n");
 
 	// Get message from server
 	memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer
@@ -133,32 +150,47 @@ int main(int argc, char *argv[])
 		exit(2);
 	}
 
-	plaintext = process_file(argv[1]);
-	mykey = process_file(argv[2]);
-
-	// Check to make sure both files are the exact length
-	if(sizeof(plaintext) != sizeof(mykey ))
-	{
-		fprintf(stderr, "Files are not the same length");
-		exit(1);
+	// In order to send full file, make sure to keep track of the number of bytes sent
+	point_to_buf = plaintext;
+	ptlength= strlen(plaintext);
+	while(ptlength > 0)
+	{	
+		// Send plaintext to server
+		charsWritten = send(socketFD, point_to_buf, 70000, 0); // Write to the server
+		if (charsWritten < 0) error("CLIENT: ERROR writing to socket");
+		
+		ptlength = ptlength - charsWritten;
+		point_to_buf = point_to_buf + charsWritten;
 	}
-
 	
-	// Send plaintext to server
-	charsWritten = send(socketFD, plaintext, strlen(plaintext)-2, 0); // Write to the server
-	if (charsWritten < 0) error("CLIENT: ERROR writing to socket");
-	if (charsWritten < strlen(buffer)) printf("CLIENT: WARNING: Not all data written to socket!\n");
-
 	
 	// Get message from server as a block from combing the two files
 	memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer
 	charsRead = recv(socketFD, buffer, sizeof(buffer) - 1, 0); // Read data from the socket, leaving \0 at end
 	if (charsRead < 0) error("CLIENT: ERROR reading from socket");
 
-	// Send  mykey to server
-	charsWritten = send(socketFD, mykey, strlen(mykey)-2, 0); // Write to the server
-	if (charsWritten < 0) error("CLIENT: ERROR writing to socket");
-	if (charsWritten < strlen(buffer)) printf("CLIENT: WARNING: Not all data written to socket!\n");
+
+	//In order to send full file, make sure to keep track of the number of bytes sent
+	point_to_buf = mykey;
+	ptlength = strlen(plaintext);
+	while(ptlength > 0)
+	{
+		// Send  mykey to server
+		charsWritten = send(socketFD, point_to_buf, 70000, 0); // Write to the server
+		
+		if (charsWritten < 0) error("CLIENT: ERROR writing to socket");
+	
+		ptlength = ptlength - charsWritten;
+		point_to_buf = point_to_buf + charsWritten;
+	}
+
+	sleep(3);
+	memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer
+	charsRead = recv(socketFD, buffer, sizeof(buffer)-1, 0); // Read data from the socket, leaving \0 at end
+	if (charsRead < 0) error("CLIENT: ERROR reading from socket");
+
+	printf("%s\n", buffer);
+
 
 	free(plaintext);
 	free(mykey);

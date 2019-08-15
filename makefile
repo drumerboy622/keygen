@@ -1,8 +1,8 @@
 make:
-	gcc -o otp_enc_d otp_enc_d.c -Wall
-	gcc -o otp_enc otp_enc.c -Wall
+	gcc -o otp_dec_d otp_dec_d.c -Wall
+	gcc -o otp_dec otp_dec.c -Wall
 
 edit:
-	vim otp_enc.c
+	vim otp_dec.c
 editd:
-	vim otp_enc_d.c
+	vim otp_dec_d.c
